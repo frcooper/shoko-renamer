@@ -5,8 +5,8 @@ function sanitize_filename(str)
   str = str:gsub("&"," and ")
   str = str:gsub("/","-")
   str = str:gsub(": "," - ")
-  str = str:gsub(" ", ".")                        -- replace spaces with dots
-  str = str:gsub("[%.%_]+", function(s) return s:sub(1,1) end)  -- collapse repeats
+  -- str = str:gsub(" ", ".")                        -- replace spaces with dots
+  str = str:gsub("[%.%_%s]+", function(s) return s:sub(1,1) end)  -- collapse repeats
   return str
 end
 
@@ -26,10 +26,12 @@ function is_hentai(a_name)
     -- there are some titles that we choose to override the anidb classification
     local hentai_titles = {
         "Cream Lemon",
-        "High School DxD",
+        "High School D",
         "Lemon Angel",
         "Lemon Cream",
+        "Midori",
         "Violence Jack",
+        "Wicked City",
     }
     if is_in_list(a_name, hentai_titles) then
         hentai = true
@@ -41,7 +43,6 @@ local maxnamelen = 77
 local animelanguage = Language.English
 local episodelanguage = Language.English
 local spacechar = " "
-
 
 local animename = anime:getname(Language.English) or anime.preferredname
 
@@ -94,16 +95,6 @@ end
 local movie_info = "(" .. table.concat({ res, codec, bitdepth, source }, " "):cleanspaces(spacechar) .. ")"
 local ep_info = "(" .. table.concat({ res, codec }, " "):cleanspaces(spacechar) .. ")"
 
-local centag = ""
-if file.anidb then
-  -- Censorship is only relevent if the anime is age restricted
-  if anime.restricted then
-    if file.anidb.censored then
-      centag = "[CEN]"
-    end
-  end
-end
-
 local langtag = ""
 local nonnativedublangs = dublangs:except({ Language.Japanese, Language.Chinese, Language.Korean, Language.Unknown })
 if nonnativedublangs:count() == 1 and dublangs:count() == 2 then
@@ -114,15 +105,19 @@ elseif nonnativedublangs:count() > 0 then
   langtag = "[DUB]"
 end
 
+local centag = ""
+if file.anidb then
+  -- Censorship is only relevent if the anime is age restricted
+  if anime.restricted then
+    if file.anidb.censored then
+      centag = "[CEN]"
+    end
+  end
+end
+
 local group = ""
 if file.anidb and file.anidb.releasegroup then
   group = "[" .. (file.anidb.releasegroup.shortname or file.anidb.releasegroup.name) .. "]"
-end
-
-local crchash = ""
--- CRC can be null if disabled in Shoko settings, so need to check it
-if file.hashes.crc then
-  crchash = "[" .. file.hashes.crc .. "]"
 end
 
 local fileinfo = ""
@@ -136,6 +131,7 @@ if anime.type == AnimeType.Movie then
 	  movie_info,
 	  langtag,
     centag,
+    group
   }
 
   if is_hentai(animename) then
@@ -151,6 +147,7 @@ else
 	  ep_info,
 	  langtag,
     centag,
+    group
   }
 
   if is_hentai(animename) then
