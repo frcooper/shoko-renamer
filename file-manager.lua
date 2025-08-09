@@ -1,3 +1,7 @@
+function filemanager_current_version()
+  return "v0.1.0"
+end
+
 function sanitize_filename(str)
   str = str:gsub("^[%-%.%_]+", "")                -- trim leading . or _ or -
   str = str:gsub("[%-%.%_]+$", "")                -- trim trailing . or _ or -
