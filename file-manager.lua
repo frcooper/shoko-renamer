@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.1.1"
+  return "v0.1.2"
 end
 
 function sanitize_filename(str)
@@ -29,11 +29,16 @@ function is_hentai(a_name)
     -- this function is a hack because it is totally arbitrary
     -- there are some titles that we choose to override the anidb classification
     local hentai_titles = {
+        "Bikini Warriors",
         "Cream Lemon",
+        "Harem in the Labyrinth of Another World",
         "High School D",
+        "Kodomo no Jikan",
         "Lemon Angel",
         "Lemon Cream",
         "Midori",
+        "Queen's Blade",
+        "School Days",
         "Violence Jack",
         "Wicked City",
     }
@@ -111,17 +116,16 @@ end
 
 local centag = ""
 if file.anidb then
-  -- Censorship is only relevent if the anime is age restricted
-  if anime.restricted then
-    if file.anidb.censored then
-      centag = "[CEN]"
-    end
+  if file.anidb.censored then
+    centag = "[CEN]"
   end
 end
 
 local group = ""
-if file.anidb and file.anidb.releasegroup then
-  group = "[" .. (file.anidb.releasegroup.shortname or file.anidb.releasegroup.name) .. "]"
+if file.anidb then
+  if file.anidb.releasegroup then
+    group = "[" .. (file.anidb.releasegroup.shortname or file.anidb.releasegroup.name) .. "]"
+  end
 end
 
 local fileinfo = ""
