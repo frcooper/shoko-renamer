@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.1.2"
+  return "v0.1.3"
 end
 
 function sanitize_filename(str)
@@ -33,6 +33,7 @@ function is_hentai(a_name)
         "Cream Lemon",
         "Harem in the Labyrinth of Another World",
         "High School D",
+        "Interspecies Reviewers",
         "Kodomo no Jikan",
         "Lemon Angel",
         "Lemon Cream",
