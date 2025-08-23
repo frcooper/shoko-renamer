@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.1.3"
+  return "v0.1.4"
 end
 
 function sanitize_filename(str)
@@ -29,6 +29,7 @@ function is_hentai(a_name)
     -- this function is a hack because it is totally arbitrary
     -- there are some titles that we choose to override the anidb classification
     local hentai_titles = {
+        "Apocalypse Zero",
         "Bikini Warriors",
         "Cream Lemon",
         "Harem in the Labyrinth of Another World",
