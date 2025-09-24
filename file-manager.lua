@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.1.4"
+  return "v0.1.5"
 end
 
 function sanitize_filename(str)
@@ -39,6 +39,7 @@ function is_hentai(a_name)
         "Lemon Angel",
         "Lemon Cream",
         "Midori",
+        "Nukitashi The Animation",
         "Queen's Blade",
         "School Days",
         "Violence Jack",
