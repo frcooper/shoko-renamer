@@ -68,13 +68,9 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
   if (file.anidb and file.anidb.version > 1) then
     fileversion = "v" .. file.anidb.version
   end
-  -- Padding is determined from the number of episodes of the same type in the anime (#tostring() gives the number of digits required, e.g. 10 eps -> 2 digits)
-  -- Padding is at least 2 digits
-  local totalEpisodes = 0
-  if anime.episodecounts and episode and episode.type and anime.episodecounts[episode.type] then
-    totalEpisodes = anime.episodecounts[episode.type]
-  end
-  local epnumpadding = math.max(#tostring(totalEpisodes), 2)
+  -- Padding previously used total episode count with a minimum of 2 digits.
+  -- Remove zero padding entirely by forcing padding to 1 digit.
+  local epnumpadding = 1
   -- Add prefix for non-regular episode types
   local epprefix = ""
   if episode and episode.type and episode.type ~= EpisodeType.Episode then
