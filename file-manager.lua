@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.1.6"
+  return "v0.2.0"
 end
 
 function sanitize_filename(str)
@@ -92,8 +92,11 @@ if file.media and file.media.video then
   end
 end
 
+-- Build ordered audio track list and language summaries
+local audioTracks = {}
 local dublangs = from({})
 if file.media and file.media.audio then
+  audioTracks = file.media.audio
   dublangs = from(file.media.audio):select("language"):distinct()
 end
 local sublangs = from({})
@@ -104,8 +107,8 @@ end
 local source = ""
 if file.anidb then
   source = file.anidb.source or ""
-  -- Dub and sub languages from anidb are usually more accurate
-  -- But will return a single unknown language if there is none, needs to be fixed in Shoko
+  -- Dub and sub languages from anidb are usually more accurate for summaries,
+  -- but we use actual file tracks (audioTracks) for DUB/DUAL/MULTI tagging to preserve order/count.
   if file.anidb.media then
     if file.anidb.media.dublanguages then
       local dublangs_r = from(file.anidb.media.dublanguages):distinct()
@@ -125,14 +128,32 @@ end
 local movie_info = "(" .. table.concat({ res, codec, bitdepth, source }, " "):cleanspaces(spacechar) .. ")"
 local ep_info = "(" .. table.concat({ res, codec }, " "):cleanspaces(spacechar) .. ")"
 
+-- Determine native language from AniDB titles (UDP ANIME titles proxy via Shoko API)
+local function get_native_language_from_anidb()
+  local candidates = { Language.Japanese, Language.Korean, Language.Chinese }
+  for _, lang in ipairs(candidates) do
+    local title = anime:getname(lang)
+    if title and title ~= "" then
+      return lang
+    end
+  end
+  -- Fallback
+  return Language.Japanese
+end
+
+-- DUB/DUAL/MULTI logic based on track count and first track language vs AniDB native language
 local langtag = ""
-local nonnativedublangs = dublangs:except({ Language.Japanese, Language.Chinese, Language.Korean, Language.Unknown })
-if nonnativedublangs:count() == 1 and dublangs:count() == 2 then
-  langtag = "[DUAL]"
-elseif dublangs:count() > 2 then
+local audioTrackCount = #audioTracks
+if audioTrackCount == 2 then
+  local firstAudioLang = audioTracks[1] and audioTracks[1].language or nil
+  local nativeLang = get_native_language_from_anidb()
+  if firstAudioLang ~= nil and nativeLang ~= nil and firstAudioLang == nativeLang then
+    langtag = "[DUAL]"
+  else
+    langtag = "[DUB]"
+  end
+elseif audioTrackCount >= 3 then
   langtag = "[MULTI]"
-elseif nonnativedublangs:count() > 0 then
-  langtag = "[DUB]"
 end
 
 local centag = ""
