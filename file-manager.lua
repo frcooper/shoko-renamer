@@ -1,16 +1,18 @@
 function filemanager_current_version()
-  return "v0.1.5"
+  return "v0.1.6"
 end
 
 function sanitize_filename(str)
-  str = str:gsub("^[%-%.%_]+", "")                -- trim leading . or _ or -
-  str = str:gsub("[%-%.%_]+$", "")                -- trim trailing . or _ or -
-  str = str:gsub("[?\\,\\!\'\"]","")
-  str = str:gsub("&"," and ")
-  str = str:gsub("/","-")
-  str = str:gsub(": "," - ")
-  -- str = str:gsub(" ", ".")                        -- replace spaces with dots
-  str = str:gsub("[%.%_%s]+", function(s) return s:sub(1,1) end)  -- collapse repeats
+  str = tostring(str or "")
+  -- Replace entities and separators
+  str = str:gsub("&", " and ")
+  str = str:gsub(":%s*", " - ")                   -- normalize any colon to " - "
+  -- Remove/replace Windows-invalid and control chars: \ / : * ? " < > | and control chars
+  str = str:gsub("[%c%z<>:\"/\\|%?%*]+", "-")
+  -- Collapse runs of space/._- to a single char
+  str = str:gsub("[%s%._%-]+", function(s) return s:sub(1,1) end)
+  -- Trim leading/trailing separators, spaces, and dots
+  str = str:gsub("^[%s%._%-]+", ""):gsub("[%s%._%-]+$", "")
   return str
 end
 
@@ -52,8 +54,6 @@ function is_hentai(a_name)
 end
 
 local maxnamelen = 77
-local animelanguage = Language.English
-local episodelanguage = Language.English
 local spacechar = " "
 
 local animename = anime:getname(Language.English) or anime.preferredname
@@ -70,7 +70,11 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
   end
   -- Padding is determined from the number of episodes of the same type in the anime (#tostring() gives the number of digits required, e.g. 10 eps -> 2 digits)
   -- Padding is at least 2 digits
-  local epnumpadding = math.max(#tostring(anime.episodecounts[episode.type]), 2)
+  local totalEpisodes = 0
+  if anime.episodecounts and episode and episode.type and anime.episodecounts[episode.type] then
+    totalEpisodes = anime.episodecounts[episode.type]
+  end
+  local epnumpadding = math.max(#tostring(totalEpisodes), 2)
   episodenumber = episode_numbers(epnumpadding) .. fileversion
 
   -- If this file is associated with a single episode and the episode doesn't have a generic name, then add the episode name
@@ -79,28 +83,42 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
   end
 end
 
-local res = file.media.video.res or ""
-local codec = file.media.video.codec or ""
-local bitdepth = ""
-if file.media.video.bitdepth and file.media.video.bitdepth ~= 8 then
-  bitdepth = file.media.video.bitdepth .. "bit"
+local res, codec, bitdepth = "", "", ""
+if file.media and file.media.video then
+  res = file.media.video.res or ""
+  codec = file.media.video.codec or ""
+  if file.media.video.bitdepth and file.media.video.bitdepth ~= 8 then
+    bitdepth = file.media.video.bitdepth .. "bit"
+  end
 end
 
-local dublangs = from(file.media.audio):select("language"):distinct()
-local sublangs = from(file.media.sublanguages):distinct()
+local dublangs = from({})
+if file.media and file.media.audio then
+  dublangs = from(file.media.audio):select("language"):distinct()
+end
+local sublangs = from({})
+if file.media and file.media.sublanguages then
+  sublangs = from(file.media.sublanguages):distinct()
+end
 
 local source = ""
 if file.anidb then
-  source = file.anidb.source
+  source = file.anidb.source or ""
   -- Dub and sub languages from anidb are usually more accurate
   -- But will return a single unknown language if there is none, needs to be fixed in Shoko
-  local dublangs_r = from(file.anidb.media.dublanguages):distinct()
-  if dublangs_r:first() ~= "unk" then
-    dublangs = dublangs_r
-  end
-  local sublangs_r = from(file.anidb.media.sublanguages):distinct()
-  if sublangs_r:first() ~= "unk" then
-    sublangs = sublangs_r
+  if file.anidb.media then
+    if file.anidb.media.dublanguages then
+      local dublangs_r = from(file.anidb.media.dublanguages):distinct()
+      if dublangs_r:first() ~= "unk" then
+        dublangs = dublangs_r
+      end
+    end
+    if file.anidb.media.sublanguages then
+      local sublangs_r = from(file.anidb.media.sublanguages):distinct()
+      if sublangs_r:first() ~= "unk" then
+        sublangs = sublangs_r
+      end
+    end
   end
 end
 
@@ -139,8 +157,8 @@ if anime.type == AnimeType.Movie then
     animename:truncate(maxnamelen),
     episodenumber,
     episodename:truncate(maxnamelen),
-	  movie_info,
-	  langtag,
+    movie_info,
+    langtag,
     centag,
     group
   }
@@ -155,8 +173,8 @@ else
   namelist = {
     episodenumber,
     episodename:truncate(maxnamelen),
-	  ep_info,
-	  langtag,
+    ep_info,
+    langtag,
     centag,
     group
   }
