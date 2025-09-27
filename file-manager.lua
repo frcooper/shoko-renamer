@@ -75,7 +75,20 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
     totalEpisodes = anime.episodecounts[episode.type]
   end
   local epnumpadding = math.max(#tostring(totalEpisodes), 2)
-  episodenumber = episode_numbers(epnumpadding) .. fileversion
+  -- Add prefix for non-regular episode types
+  local epprefix = ""
+  if episode and episode.type and episode.type ~= EpisodeType.Episode then
+    if episode.type == EpisodeType.Credits then
+      epprefix = "C"
+    elseif episode.type == EpisodeType.Special then
+      epprefix = "S"
+    elseif episode.type == EpisodeType.Trailer then
+      epprefix = "T"
+    else
+      epprefix = "X"
+    end
+  end
+  episodenumber = epprefix .. episode_numbers(epnumpadding) .. fileversion
 
   -- If this file is associated with a single episode and the episode doesn't have a generic name, then add the episode name
   if #episodes == 1 and not engepname:find("^Episode") and not engepname:find("^OVA") then
