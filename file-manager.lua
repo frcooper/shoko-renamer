@@ -1,16 +1,18 @@
 function filemanager_current_version()
-  return "v0.1.5"
+  return "v0.2.0"
 end
 
 function sanitize_filename(str)
-  str = str:gsub("^[%-%.%_]+", "")                -- trim leading . or _ or -
-  str = str:gsub("[%-%.%_]+$", "")                -- trim trailing . or _ or -
-  str = str:gsub("[?\\,\\!\'\"]","")
-  str = str:gsub("&"," and ")
-  str = str:gsub("/","-")
-  str = str:gsub(": "," - ")
-  -- str = str:gsub(" ", ".")                        -- replace spaces with dots
-  str = str:gsub("[%.%_%s]+", function(s) return s:sub(1,1) end)  -- collapse repeats
+  str = tostring(str or "")
+  -- Replace entities and separators
+  str = str:gsub("&", " and ")
+  str = str:gsub(":%s*", " - ")                   -- normalize any colon to " - "
+  -- Remove/replace Windows-invalid and control chars: \ / : * ? " < > | and control chars
+  str = str:gsub("[%c%z<>:\"/\\|%?%*]+", "-")
+  -- Collapse runs of space/._- to a single char
+  str = str:gsub("[%s%._%-]+", function(s) return s:sub(1,1) end)
+  -- Trim leading/trailing separators, spaces, and dots
+  str = str:gsub("^[%s%._%-]+", ""):gsub("[%s%._%-]+$", "")
   return str
 end
 
@@ -52,8 +54,6 @@ function is_hentai(a_name)
 end
 
 local maxnamelen = 77
-local animelanguage = Language.English
-local episodelanguage = Language.English
 local spacechar = " "
 
 local animename = anime:getname(Language.English) or anime.preferredname
@@ -68,10 +68,23 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
   if (file.anidb and file.anidb.version > 1) then
     fileversion = "v" .. file.anidb.version
   end
-  -- Padding is determined from the number of episodes of the same type in the anime (#tostring() gives the number of digits required, e.g. 10 eps -> 2 digits)
-  -- Padding is at least 2 digits
-  local epnumpadding = math.max(#tostring(anime.episodecounts[episode.type]), 2)
-  episodenumber = episode_numbers(epnumpadding) .. fileversion
+  -- Padding previously used total episode count with a minimum of 2 digits.
+  -- Remove zero padding entirely by forcing padding to 1 digit.
+  local epnumpadding = 1
+  -- Add prefix for non-regular episode types
+  local epprefix = ""
+  if episode and episode.type and episode.type ~= EpisodeType.Episode then
+    if episode.type == EpisodeType.Credits then
+      epprefix = "C"
+    elseif episode.type == EpisodeType.Special then
+      epprefix = "S"
+    elseif episode.type == EpisodeType.Trailer then
+      epprefix = "T"
+    else
+      epprefix = "X"
+    end
+  end
+  episodenumber = epprefix .. episode_numbers(epnumpadding) .. fileversion
 
   -- If this file is associated with a single episode and the episode doesn't have a generic name, then add the episode name
   if #episodes == 1 and not engepname:find("^Episode") and not engepname:find("^OVA") then
@@ -79,42 +92,77 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
   end
 end
 
-local res = file.media.video.res or ""
-local codec = file.media.video.codec or ""
-local bitdepth = ""
-if file.media.video.bitdepth and file.media.video.bitdepth ~= 8 then
-  bitdepth = file.media.video.bitdepth .. "bit"
+local res, codec, bitdepth = "", "", ""
+if file.media and file.media.video then
+  res = file.media.video.res or ""
+  codec = file.media.video.codec or ""
+  if file.media.video.bitdepth and file.media.video.bitdepth ~= 8 then
+    bitdepth = file.media.video.bitdepth .. "bit"
+  end
 end
 
-local dublangs = from(file.media.audio):select("language"):distinct()
-local sublangs = from(file.media.sublanguages):distinct()
+-- Build ordered audio track list and language summaries
+local audioTracks = {}
+local dublangs = from({})
+if file.media and file.media.audio then
+  audioTracks = file.media.audio
+  dublangs = from(file.media.audio):select("language"):distinct()
+end
+local sublangs = from({})
+if file.media and file.media.sublanguages then
+  sublangs = from(file.media.sublanguages):distinct()
+end
 
 local source = ""
 if file.anidb then
-  source = file.anidb.source
-  -- Dub and sub languages from anidb are usually more accurate
-  -- But will return a single unknown language if there is none, needs to be fixed in Shoko
-  local dublangs_r = from(file.anidb.media.dublanguages):distinct()
-  if dublangs_r:first() ~= "unk" then
-    dublangs = dublangs_r
-  end
-  local sublangs_r = from(file.anidb.media.sublanguages):distinct()
-  if sublangs_r:first() ~= "unk" then
-    sublangs = sublangs_r
+  source = file.anidb.source or ""
+  -- Dub and sub languages from anidb are usually more accurate for summaries,
+  -- but we use actual file tracks (audioTracks) for DUB/DUAL/MULTI tagging to preserve order/count.
+  if file.anidb.media then
+    if file.anidb.media.dublanguages then
+      local dublangs_r = from(file.anidb.media.dublanguages):distinct()
+      if dublangs_r:first() ~= "unk" then
+        dublangs = dublangs_r
+      end
+    end
+    if file.anidb.media.sublanguages then
+      local sublangs_r = from(file.anidb.media.sublanguages):distinct()
+      if sublangs_r:first() ~= "unk" then
+        sublangs = sublangs_r
+      end
+    end
   end
 end
 
 local movie_info = "(" .. table.concat({ res, codec, bitdepth, source }, " "):cleanspaces(spacechar) .. ")"
 local ep_info = "(" .. table.concat({ res, codec }, " "):cleanspaces(spacechar) .. ")"
 
+-- Determine native language from AniDB titles (UDP ANIME titles proxy via Shoko API)
+local function get_native_language_from_anidb()
+  local candidates = { Language.Japanese, Language.Korean, Language.Chinese }
+  for _, lang in ipairs(candidates) do
+    local title = anime:getname(lang)
+    if title and title ~= "" then
+      return lang
+    end
+  end
+  -- Fallback
+  return Language.Japanese
+end
+
+-- DUB/DUAL/MULTI logic based on track count and first track language vs AniDB native language
 local langtag = ""
-local nonnativedublangs = dublangs:except({ Language.Japanese, Language.Chinese, Language.Korean, Language.Unknown })
-if nonnativedublangs:count() == 1 and dublangs:count() == 2 then
-  langtag = "[DUAL]"
-elseif dublangs:count() > 2 then
+local audioTrackCount = #audioTracks
+if audioTrackCount == 2 then
+  local firstAudioLang = audioTracks[1] and audioTracks[1].language or nil
+  local nativeLang = get_native_language_from_anidb()
+  if firstAudioLang ~= nil and nativeLang ~= nil and firstAudioLang == nativeLang then
+    langtag = "[DUAL]"
+  else
+    langtag = "[DUB]"
+  end
+elseif audioTrackCount >= 3 then
   langtag = "[MULTI]"
-elseif nonnativedublangs:count() > 0 then
-  langtag = "[DUB]"
 end
 
 local centag = ""
@@ -139,8 +187,8 @@ if anime.type == AnimeType.Movie then
     animename:truncate(maxnamelen),
     episodenumber,
     episodename:truncate(maxnamelen),
-	  movie_info,
-	  langtag,
+    movie_info,
+    langtag,
     centag,
     group
   }
@@ -155,8 +203,8 @@ else
   namelist = {
     episodenumber,
     episodename:truncate(maxnamelen),
-	  ep_info,
-	  langtag,
+    ep_info,
+    langtag,
     centag,
     group
   }
