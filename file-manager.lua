@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.2.0"
+  return "v0.2.1"
 end
 
 function sanitize_filename(str)
@@ -9,8 +9,14 @@ function sanitize_filename(str)
   str = str:gsub(":%s*", " - ")                   -- normalize any colon to " - "
   -- Remove/replace Windows-invalid and control chars: \ / : * ? " < > | and control chars
   str = str:gsub("[%c%z<>:\"/\\|%?%*]+", "-")
-  -- Collapse runs of space/._- to a single char
-  str = str:gsub("[%s%._%-]+", function(s) return s:sub(1,1) end)
+  -- Collapse repeated separators but preserve spaced hyphen separators
+  -- Collapse runs within each class first
+  str = str:gsub("%s+", " ")
+  str = str:gsub("_+", "_")
+  str = str:gsub("%.+", ".")
+  str = str:gsub("%-+", "-")
+  -- Normalize only hyphens that already have spaces around to a single " - "
+  str = str:gsub("%s+%-%s+", " - ")
   -- Trim leading/trailing separators, spaces, and dots
   str = str:gsub("^[%s%._%-]+", ""):gsub("[%s%._%-]+$", "")
   return str
