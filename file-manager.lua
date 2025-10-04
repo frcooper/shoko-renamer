@@ -1,5 +1,5 @@
 function filemanager_current_version()
-  return "v0.2.1"
+  return "v0.2.2"
 end
 
 function sanitize_filename(str)
@@ -55,6 +55,7 @@ function is_hentai(a_name)
     }
     if is_in_list(a_name, hentai_titles) then
         hentai = true
+        log("[INFO] Overriding hentai classification for title: " .. a_name)
     end
     return hentai
 end
