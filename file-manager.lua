@@ -32,6 +32,29 @@ function is_in_list(str, list)
   return false
 end
 
+-- Determine if this file should be treated as a single, complete movie file
+-- Criteria:
+--  - Anime type is Movie
+--  - The file is linked to exactly one episode
+--  - The episode name explicitly indicates a complete movie (starts with "Complete Movie")
+local function is_single_file_complete_movie()
+  if anime.type ~= AnimeType.Movie then return false end
+  local linkedEpisodeCount = (type(episodes) == "table") and #episodes or 0
+  if linkedEpisodeCount ~= 1 then return false end
+  local name = ""
+  if episode and episode.getname then
+    name = episode:getname(Language.English) or ""
+  end
+  return name:find("^Complete Movie") ~= nil
+end
+
+-- Should we treat this file like an "episode" even if the anime type is Movie?
+-- We do so unless it is a single, complete movie file as defined above.
+local function should_treat_as_episode()
+  if anime.type ~= AnimeType.Movie then return true end
+  return not is_single_file_complete_movie()
+end
+
 function is_hentai(a_name)
     local hentai = anime.restricted
     -- this function is a hack because it is totally arbitrary
@@ -69,8 +92,8 @@ local episodename = ""
 local engepname = episode:getname(Language.English) or ""
 local episodenumber = ""
 
--- If the episode is not a complete movie then add an episode number/name
-if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
+-- If this should be treated as an episode (including multi-part movies), add episode number/name
+if should_treat_as_episode() then
   local fileversion = ""
   if (file.anidb and file.anidb.version > 1) then
     fileversion = "v" .. file.anidb.version
@@ -91,7 +114,14 @@ if anime.type ~= AnimeType.Movie or not engepname:find("^Complete Movie") then
       epprefix = "X"
     end
   end
-  episodenumber = epprefix .. episode_numbers(epnumpadding) .. fileversion
+  -- Avoid double type prefixes: only c/s/t/x are valid. If episode_numbers already
+  -- starts with one of these (case-insensitive), don't prepend epprefix again.
+  local epnum_raw = episode_numbers(epnumpadding)
+  if epnum_raw:match("^[cCsStTxX]%d") then
+    episodenumber = epnum_raw .. fileversion
+  else
+    episodenumber = epprefix .. epnum_raw .. fileversion
+  end
 
   -- If this file is associated with a single episode and the episode doesn't have a generic name, then add the episode name
   if #episodes == 1 and not engepname:find("^Episode") and not engepname:find("^OVA") then
@@ -189,7 +219,7 @@ end
 local fileinfo = ""
 local namelist = ""
 
-if anime.type == AnimeType.Movie then
+if is_single_file_complete_movie() then
   namelist = {
     animename:truncate(maxnamelen),
     episodenumber,
