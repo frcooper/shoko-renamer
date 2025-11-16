@@ -73,6 +73,7 @@ function is_hentai(a_name)
         "Nukitashi The Animation",
         "Queen's Blade",
         "School Days",
+        "The Qwaser of Stigmata",
         "Violence Jack",
         "Wicked City",
     }
